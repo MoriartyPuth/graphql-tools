@@ -1,5 +1,11 @@
 # @graphql-tools/executor
 
+## 4.1.7
+
+### Patch Changes
+
+- [#8618](https://github.com/ardatan/graphql-tools/pull/8618) [`9f95ac4`](https://github.com/ardatan/graphql-tools/commit/9f95ac4d8a0fd2cc34793e1ce8ec76a0ebde9479) Thanks [@jhonDoe15](https://github.com/jhonDoe15)! - Avoid allocating indexed paths for successful synchronous scalar and enum list items while retaining scalar serialization, error locations, asynchronous completion and incremental delivery behavior.
+
 ## 4.1.6
 
 ### Patch Changes
