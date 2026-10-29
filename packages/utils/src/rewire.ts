@@ -26,6 +26,7 @@ import {
   isSpecifiedScalarType,
   isUnionType,
 } from 'graphql';
+import { assignSafeObjectKey } from './jsutils.js';
 import { getBuiltInForStub, isNamedStub } from './stub.js';
 
 export function rewireTypes(
@@ -85,18 +86,18 @@ export function rewireTypes(
       return directive;
     }
     const directiveConfig = directive.toConfig();
-    directiveConfig.args = rewireArgs(directiveConfig.args);
+    directiveConfig.args = rewireArgs(directiveConfig.args) as typeof directiveConfig.args;
     return new GraphQLDirective(directiveConfig);
   }
 
   function rewireArgs(args: GraphQLFieldConfigArgumentMap) {
-    const rewiredArgs = {};
+    const rewiredArgs: GraphQLFieldConfigArgumentMap = {};
     for (const argName in args) {
       const arg = args[argName];
       const rewiredArgType = rewireType(arg.type);
       if (rewiredArgType != null) {
         arg.type = rewiredArgType;
-        rewiredArgs[argName] = arg;
+        assignSafeObjectKey(rewiredArgs, argName, arg);
       }
     }
     return rewiredArgs;
@@ -153,27 +154,27 @@ export function rewireTypes(
   }
 
   function rewireFields(fields: GraphQLFieldConfigMap<any, any>): GraphQLFieldConfigMap<any, any> {
-    const rewiredFields = {};
+    const rewiredFields: GraphQLFieldConfigMap<any, any> = {};
     for (const fieldName in fields) {
       const field = fields[fieldName];
       const rewiredFieldType = rewireType(field.type);
       if (rewiredFieldType != null && field.args) {
         field.type = rewiredFieldType;
         field.args = rewireArgs(field.args);
-        rewiredFields[fieldName] = field;
+        assignSafeObjectKey(rewiredFields, fieldName, field);
       }
     }
     return rewiredFields;
   }
 
   function rewireInputFields(fields: GraphQLInputFieldConfigMap): GraphQLInputFieldConfigMap {
-    const rewiredFields = {};
+    const rewiredFields: GraphQLInputFieldConfigMap = {};
     for (const fieldName in fields) {
       const field = fields[fieldName];
       const rewiredFieldType = rewireType(field.type);
       if (rewiredFieldType != null) {
         field.type = rewiredFieldType;
-        rewiredFields[fieldName] = field;
+        assignSafeObjectKey(rewiredFields, fieldName, field);
       }
     }
     return rewiredFields;

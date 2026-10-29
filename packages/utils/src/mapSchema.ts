@@ -3,6 +3,7 @@ import {
   FieldDefinitionNode,
   GraphQLDirective,
   GraphQLEnumType,
+  GraphQLEnumValueConfigMap,
   GraphQLFieldConfig,
   GraphQLInputFieldConfig,
   GraphQLInputObjectType,
@@ -41,6 +42,7 @@ import {
   SchemaFieldMapperTypes,
   SchemaMapper,
 } from './Interfaces.js';
+import { assignSafeObjectKey } from './jsutils.js';
 import { rewireTypes } from './rewire.js';
 import { parseInputValue, serializeInputValue } from './transformInputValue.js';
 
@@ -109,32 +111,32 @@ function mapTypes(
   schemaMapper: SchemaMapper,
   testFn: (originalType: GraphQLNamedType) => boolean = () => true,
 ): Record<string, GraphQLNamedType> {
-  const newTypeMap = {};
+  const newTypeMap: Record<string, GraphQLNamedType> = {};
 
   for (const typeName in originalTypeMap) {
     if (!typeName.startsWith('__') && !builtinTypes.includes(typeName)) {
       const originalType = originalTypeMap[typeName];
 
       if (originalType == null || !testFn(originalType)) {
-        newTypeMap[typeName] = originalType;
+        assignSafeObjectKey(newTypeMap, typeName, originalType);
         continue;
       }
 
       const typeMapper = getTypeMapper(schema, schemaMapper, typeName);
 
       if (typeMapper == null) {
-        newTypeMap[typeName] = originalType;
+        assignSafeObjectKey(newTypeMap, typeName, originalType);
         continue;
       }
 
       const maybeNewType = typeMapper(originalType, schema);
 
       if (maybeNewType === undefined) {
-        newTypeMap[typeName] = originalType;
+        assignSafeObjectKey(newTypeMap, typeName, originalType);
         continue;
       }
 
-      newTypeMap[typeName] = maybeNewType;
+      assignSafeObjectKey(newTypeMap, typeName, maybeNewType);
     }
   }
 
@@ -158,7 +160,7 @@ function mapEnumValues(
       [MapperKind.ENUM_TYPE]: type => {
         const config = type.toConfig();
         const originalEnumValueConfigMap = config.values;
-        const newEnumValueConfigMap = {};
+        const newEnumValueConfigMap: GraphQLEnumValueConfigMap = {};
         for (const externalValue in originalEnumValueConfigMap) {
           const originalEnumValueConfig = originalEnumValueConfigMap[externalValue];
           const mappedEnumValue = enumValueMapper(
@@ -168,13 +170,16 @@ function mapEnumValues(
             externalValue,
           );
           if (mappedEnumValue === undefined) {
-            newEnumValueConfigMap[externalValue] = originalEnumValueConfig;
+            assignSafeObjectKey(newEnumValueConfigMap, externalValue, originalEnumValueConfig);
           } else if (Array.isArray(mappedEnumValue)) {
             const [newExternalValue, newEnumValueConfig] = mappedEnumValue;
-            newEnumValueConfigMap[newExternalValue] =
-              newEnumValueConfig === undefined ? originalEnumValueConfig : newEnumValueConfig;
+            assignSafeObjectKey(
+              newEnumValueConfigMap,
+              newExternalValue,
+              newEnumValueConfig === undefined ? originalEnumValueConfig : newEnumValueConfig,
+            );
           } else if (mappedEnumValue !== null) {
-            newEnumValueConfigMap[externalValue] = mappedEnumValue;
+            assignSafeObjectKey(newEnumValueConfigMap, externalValue, mappedEnumValue);
           }
         }
         return correctASTNodes(
@@ -293,7 +298,7 @@ function mapFields(
   schema: GraphQLSchema,
   schemaMapper: SchemaMapper,
 ): Record<string, GraphQLNamedType> {
-  const newTypeMap = {};
+  const newTypeMap: Record<string, GraphQLNamedType> = {};
 
   for (const typeName in originalTypeMap) {
     if (!typeName.startsWith('__')) {
@@ -304,25 +309,25 @@ function mapFields(
         !isInterfaceType(originalType) &&
         !isInputObjectType(originalType)
       ) {
-        newTypeMap[typeName] = originalType;
+        assignSafeObjectKey(newTypeMap, typeName, originalType);
         continue;
       }
 
       const fieldMapper = getFieldMapper(schema, schemaMapper, typeName);
       if (fieldMapper == null) {
-        newTypeMap[typeName] = originalType;
+        assignSafeObjectKey(newTypeMap, typeName, originalType);
         continue;
       }
 
       const config = originalType.toConfig();
 
       const originalFieldConfigMap = config.fields;
-      const newFieldConfigMap = {};
+      const newFieldConfigMap: Record<string, any> = {};
       for (const fieldName in originalFieldConfigMap) {
         const originalFieldConfig = originalFieldConfigMap[fieldName];
         const mappedField = fieldMapper(originalFieldConfig, fieldName, typeName, schema);
         if (mappedField === undefined) {
-          newFieldConfigMap[fieldName] = originalFieldConfig;
+          assignSafeObjectKey(newFieldConfigMap, fieldName, originalFieldConfig);
         } else if (Array.isArray(mappedField)) {
           const [newFieldName, newFieldConfig] = mappedField;
           if (newFieldConfig.astNode != null) {
@@ -334,33 +339,48 @@ function mapFields(
               },
             };
           }
-          newFieldConfigMap[newFieldName] =
-            newFieldConfig === undefined ? originalFieldConfig : newFieldConfig;
+          assignSafeObjectKey(
+            newFieldConfigMap,
+            newFieldName,
+            newFieldConfig === undefined ? originalFieldConfig : newFieldConfig,
+          );
         } else if (mappedField !== null) {
-          newFieldConfigMap[fieldName] = mappedField;
+          assignSafeObjectKey(newFieldConfigMap, fieldName, mappedField);
         }
       }
 
       if (isObjectType(originalType)) {
-        newTypeMap[typeName] = correctASTNodes(
-          new GraphQLObjectType({
-            ...(config as GraphQLObjectTypeConfig<any, any>),
-            fields: newFieldConfigMap,
-          }),
+        assignSafeObjectKey(
+          newTypeMap,
+          typeName,
+          correctASTNodes(
+            new GraphQLObjectType({
+              ...(config as GraphQLObjectTypeConfig<any, any>),
+              fields: newFieldConfigMap,
+            }),
+          ),
         );
       } else if (isInterfaceType(originalType)) {
-        newTypeMap[typeName] = correctASTNodes(
-          new GraphQLInterfaceType({
-            ...(config as GraphQLInterfaceTypeConfig<any, any>),
-            fields: newFieldConfigMap,
-          }),
+        assignSafeObjectKey(
+          newTypeMap,
+          typeName,
+          correctASTNodes(
+            new GraphQLInterfaceType({
+              ...(config as GraphQLInterfaceTypeConfig<any, any>),
+              fields: newFieldConfigMap,
+            }),
+          ),
         );
       } else {
-        newTypeMap[typeName] = correctASTNodes(
-          new GraphQLInputObjectType({
-            ...(config as GraphQLInputObjectTypeConfig),
-            fields: newFieldConfigMap,
-          }),
+        assignSafeObjectKey(
+          newTypeMap,
+          typeName,
+          correctASTNodes(
+            new GraphQLInputObjectType({
+              ...(config as GraphQLInputObjectTypeConfig),
+              fields: newFieldConfigMap,
+            }),
+          ),
         );
       }
     }
@@ -374,44 +394,44 @@ function mapArguments(
   schema: GraphQLSchema,
   schemaMapper: SchemaMapper,
 ): Record<string, GraphQLNamedType> {
-  const newTypeMap = {};
+  const newTypeMap: Record<string, GraphQLNamedType> = {};
 
   for (const typeName in originalTypeMap) {
     if (!typeName.startsWith('__')) {
       const originalType = originalTypeMap[typeName];
 
       if (!isObjectType(originalType) && !isInterfaceType(originalType)) {
-        newTypeMap[typeName] = originalType;
+        assignSafeObjectKey(newTypeMap, typeName, originalType);
         continue;
       }
 
       const argumentMapper = getArgumentMapper(schemaMapper);
       if (argumentMapper == null) {
-        newTypeMap[typeName] = originalType;
+        assignSafeObjectKey(newTypeMap, typeName, originalType);
         continue;
       }
 
       const config = originalType.toConfig();
 
       const originalFieldConfigMap = config.fields;
-      const newFieldConfigMap = {};
+      const newFieldConfigMap: Record<string, any> = {};
       for (const fieldName in originalFieldConfigMap) {
         const originalFieldConfig = originalFieldConfigMap[fieldName];
         const originalArgumentConfigMap = originalFieldConfig.args;
 
         if (originalArgumentConfigMap == null) {
-          newFieldConfigMap[fieldName] = originalFieldConfig;
+          assignSafeObjectKey(newFieldConfigMap, fieldName, originalFieldConfig);
           continue;
         }
 
         const argumentNames = Object.keys(originalArgumentConfigMap);
 
         if (!argumentNames.length) {
-          newFieldConfigMap[fieldName] = originalFieldConfig;
+          assignSafeObjectKey(newFieldConfigMap, fieldName, originalFieldConfig);
           continue;
         }
 
-        const newArgumentConfigMap = {};
+        const newArgumentConfigMap: Record<string, any> = {};
 
         for (const argumentName of argumentNames) {
           const originalArgumentConfig = originalArgumentConfigMap[argumentName];
@@ -424,36 +444,48 @@ function mapArguments(
           );
 
           if (mappedArgument === undefined) {
-            newArgumentConfigMap[argumentName] = originalArgumentConfig;
+            assignSafeObjectKey(newArgumentConfigMap, argumentName, originalArgumentConfig);
           } else if (Array.isArray(mappedArgument)) {
             const [newArgumentName, newArgumentConfig] = mappedArgument;
-            newArgumentConfigMap[newArgumentName] = newArgumentConfig;
+            assignSafeObjectKey(newArgumentConfigMap, newArgumentName, newArgumentConfig);
           } else if (mappedArgument !== null) {
-            newArgumentConfigMap[argumentName] = mappedArgument;
+            assignSafeObjectKey(newArgumentConfigMap, argumentName, mappedArgument);
           }
         }
 
-        newFieldConfigMap[fieldName] = {
+        assignSafeObjectKey(newFieldConfigMap, fieldName, {
           ...originalFieldConfig,
           args: newArgumentConfigMap,
-        };
+        });
       }
 
       if (isObjectType(originalType)) {
-        newTypeMap[typeName] = new GraphQLObjectType({
-          ...(config as unknown as GraphQLObjectTypeConfig<any, any>),
-          fields: newFieldConfigMap,
-        });
+        assignSafeObjectKey(
+          newTypeMap,
+          typeName,
+          new GraphQLObjectType({
+            ...(config as unknown as GraphQLObjectTypeConfig<any, any>),
+            fields: newFieldConfigMap,
+          }),
+        );
       } else if (isInterfaceType(originalType)) {
-        newTypeMap[typeName] = new GraphQLInterfaceType({
-          ...(config as unknown as GraphQLInterfaceTypeConfig<any, any>),
-          fields: newFieldConfigMap,
-        });
+        assignSafeObjectKey(
+          newTypeMap,
+          typeName,
+          new GraphQLInterfaceType({
+            ...(config as unknown as GraphQLInterfaceTypeConfig<any, any>),
+            fields: newFieldConfigMap,
+          }),
+        );
       } else {
-        newTypeMap[typeName] = new GraphQLInputObjectType({
-          ...(config as unknown as GraphQLInputObjectTypeConfig),
-          fields: newFieldConfigMap,
-        });
+        assignSafeObjectKey(
+          newTypeMap,
+          typeName,
+          new GraphQLInputObjectType({
+            ...(config as unknown as GraphQLInputObjectTypeConfig),
+            fields: newFieldConfigMap,
+          }),
+        );
       }
     }
   }
